@@ -53,6 +53,8 @@ export default function Screen() {
   const drawerWidth = Math.round(width * 0.8);
   const [isDrawerVisible, setIsDrawerVisible] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+
+  // Tutorial modal visibility (shown on first run and via Sidebar)
   const [tutorialVisible, setTutorialVisible] = useState(false);
 
   const slideX = useRef(new Animated.Value(-drawerWidth)).current;
@@ -60,24 +62,30 @@ export default function Screen() {
 
   useEffect(() => {
     (async () => {
-      const [savedC, savedR, savedTheme] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.capital),
-        AsyncStorage.getItem(STORAGE_KEYS.riskPct),
-        AsyncStorage.getItem(STORAGE_KEYS.theme),
-      ]);
-      if (savedC) {
-        setC(savedC);
-        setDefC(savedC);
-      }
-      if (savedR) {
-        setR(savedR);
-        setDefR(savedR);
-      }
-      if (savedTheme) setThemeName(savedTheme);
+      try {
+        const [savedC, savedR, savedTheme] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.capital),
+          AsyncStorage.getItem(STORAGE_KEYS.riskPct),
+          AsyncStorage.getItem(STORAGE_KEYS.theme),
+        ]);
 
-      // First-time tutorial check
-      const seen = await AsyncStorage.getItem(ONBOARD_KEY);
-      if (!seen) setTutorialVisible(true);
+        if (savedC) {
+          setC(savedC);
+          setDefC(savedC);
+        }
+        if (savedR) {
+          setR(savedR);
+          setDefR(savedR);
+        }
+        if (savedTheme) setThemeName(savedTheme);
+
+        // First-time tutorial check
+        const seen = await AsyncStorage.getItem(ONBOARD_KEY);
+        if (!seen) setTutorialVisible(true);
+      } catch (e) {
+        // If storage fails, don't crash—just skip defaults and show tutorial
+        setTutorialVisible(true);
+      }
     })();
   }, []);
 
@@ -160,7 +168,11 @@ export default function Screen() {
 
   const closeTutorial = async () => {
     setTutorialVisible(false);
-    await AsyncStorage.setItem(ONBOARD_KEY, "1");
+    try {
+      await AsyncStorage.setItem(ONBOARD_KEY, "1");
+    } catch {
+      // ignore
+    }
   };
 
   return (
@@ -172,7 +184,7 @@ export default function Screen() {
               <TouchableOpacity onPress={openDrawer} style={styles.menuBtn} accessibilityLabel="Open menu">
                 <Octicons name="three-bars" size={22} color={theme.headerText} />
               </TouchableOpacity>
-              <Text style={styles.headerTitle}>Risk Calculator</Text>
+              <Text style={styles.headerTitle}>TradeRisk Calculator</Text>
             </View>
             <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
               {themeName === "dark" ? (
@@ -232,7 +244,7 @@ export default function Screen() {
           setAboutOpen={setAboutOpen}
           closeDrawer={closeDrawer}
           onTutorialPress={() => {
-            setTutorialVisible(true);
+            setTutorialVisible(true); // open on demand
             closeDrawer();
           }}
           onNavigate={(route) => {
@@ -249,6 +261,7 @@ export default function Screen() {
         />
       )}
 
+      {/* Shows on first run (from ONBOARD_KEY) and on demand via Sidebar */}
       <TutorialModal visible={tutorialVisible} onClose={closeTutorial} theme={theme} />
     </ThemeContext.Provider>
   );
@@ -270,6 +283,7 @@ function FieldPercent({ label, value, onChangeText, placeholder, hint, rightBtnL
     const cleaned = text.replace(/[^0-9.]/g, "");
     const parts = cleaned.split(".");
     return parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+    // keeps only digits and a single dot
   };
 
   return (

@@ -1,9 +1,20 @@
 // src/components/SideBar.js
 import React from "react";
-import { View, Text, TouchableOpacity, ScrollView, Pressable, Animated } from "react-native";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Pressable,
+  Animated,
+  Alert,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Octicons from "react-native-vector-icons/Octicons";
 import { useTheme } from "../theme";
 import getStyles from "../styles/createStyles";
+
+const ONBOARD_KEY = "hasSeenTutorial_v1";
 
 export default function SideBar({
   fade,
@@ -13,7 +24,8 @@ export default function SideBar({
   setAboutOpen,
   closeDrawer,
   clearDefaults,
-  onTutorialPress, // NEW
+  onTutorialPress,      // existing
+  showQAReset = false,  // optional: force show QA item outside dev
 }) {
   const theme = useTheme();
   const styles = getStyles(theme);
@@ -21,6 +33,21 @@ export default function SideBar({
   const handlePress = () => {
     closeDrawer?.();
   };
+
+  const resetTutorial = async (openAfter = false) => {
+    try {
+      await AsyncStorage.removeItem(ONBOARD_KEY);
+      Alert.alert("Tutorial Reset", "It will show again on next app launch.");
+      if (openAfter && onTutorialPress) {
+        // Optionally open the tutorial immediately for QA verification
+        onTutorialPress();
+      }
+    } catch (e) {
+      Alert.alert("Error", "Could not reset tutorial flag.");
+    }
+  };
+
+  const showResetItem = __DEV__ || showQAReset;
 
   return (
     <View
@@ -60,6 +87,8 @@ export default function SideBar({
                 onPress={() => {
                   onTutorialPress?.();
                 }}
+                onLongPress={() => resetTutorial(true)} // hidden QA gesture
+                delayLongPress={500}
               >
                 <Text style={styles.drawerText}>Tutorial</Text>
               </TouchableOpacity>
@@ -80,9 +109,16 @@ export default function SideBar({
                 <Text style={styles.drawerText}>Rate Us</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.drawerItemRow} onPress={() => setAboutOpen((v) => !v)}>
+              <TouchableOpacity
+                style={styles.drawerItemRow}
+                onPress={() => setAboutOpen((v) => !v)}
+              >
                 <Text style={styles.drawerText}>About Us</Text>
-                <Octicons name={aboutOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.inputText} />
+                <Octicons
+                  name={aboutOpen ? "chevron-up" : "chevron-down"}
+                  size={18}
+                  color={theme.inputText}
+                />
               </TouchableOpacity>
 
               {aboutOpen && (
@@ -101,9 +137,21 @@ export default function SideBar({
                   </TouchableOpacity>
                 </View>
               )}
+
+              {showResetItem && (
+                <TouchableOpacity
+                  style={[styles.drawerItem, { opacity: 0.9 }]}
+                  onPress={() => resetTutorial(false)}
+                >
+                  <Text style={styles.drawerText}>Reset Tutorial (QA)</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
 
-            <TouchableOpacity style={[styles.clearBtn, { marginBottom: insets.bottom + 8 }]} onPress={clearDefaults}>
+            <TouchableOpacity
+              style={[styles.clearBtn, { marginBottom: insets.bottom + 8 }]}
+              onPress={clearDefaults}
+            >
               <Text style={styles.clearBtnText}>Clear Defaults</Text>
             </TouchableOpacity>
           </View>
