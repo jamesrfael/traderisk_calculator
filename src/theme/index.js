@@ -1,0 +1,51 @@
+import React, { createContext, useContext } from "react";
+
+export const themes = {
+  dark: {
+    background: "#0f1115",
+    headerBg: "#111521",
+    headerBorder: "#1c2230",
+    headerText: "#e8ecf1",
+    cardBg: "#151923",
+    cardBorder: "#232a36",
+    label: "#9aa4b2",
+    inputBg: "#0e121a",
+    inputBorder: "#1e2430",
+    inputText: "#e8ecf1",
+    hint: "#9aa4b2",
+    outBg: "#0e121a",
+    outBorder: "#2b3243",
+    outLabel: "#9aa4b2",
+    outValue: "#e8ecf1",
+    buttonBg: "#8b5cf6",
+    buttonText: "#fff",
+    miniBtnBg: "#171b26",
+    miniBtnBorder: "#2b3243",
+    miniBtnText: "#cbd5e1",
+  },
+  light: {
+    background: "#dedede",
+    headerBg: "#ffffff",
+    headerBorder: "#ddd",
+    headerText: "#222",
+    cardBg: "#ffffff",
+    cardBorder: "#ccc",
+    label: "#555",
+    inputBg: "#fff",
+    inputBorder: "#ccc",
+    inputText: "#000",
+    hint: "#777",
+    outBg: "#fff",
+    outBorder: "#ccc",
+    outLabel: "#555",
+    outValue: "#000",
+    buttonBg: "#0f1115",
+    buttonText: "#fff",
+    miniBtnBg: "#eee",
+    miniBtnBorder: "#bbb",
+    miniBtnText: "#000",
+  },
+};
+
+export const ThemeContext = createContext();
+export const useTheme = () => useContext(ThemeContext);

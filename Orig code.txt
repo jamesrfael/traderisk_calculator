@@ -1,0 +1,641 @@
+import React, { useEffect, useMemo, useState, createContext, useContext, useRef } from "react";
+import {
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  Platform,
+  KeyboardAvoidingView,
+  Dimensions,
+  Pressable,
+  Animated,
+  Easing,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Octicons from "react-native-vector-icons/Octicons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import OnboardingModal from "./OnboardingModal";
+
+const { width } = Dimensions.get("window");
+
+const STORAGE_KEYS = { capital: "defCapital", riskPct: "defRiskPct", theme: "appTheme" };
+
+const money = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "$0.00";
+  const fixed = num.toFixed(2);
+  const parts = fixed.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `$${parts.join(".")}`;
+};
+
+const themes = {
+  dark: {
+    background: "#0f1115",
+    headerBg: "#111521",
+    headerBorder: "#1c2230",
+    headerText: "#e8ecf1",
+    cardBg: "#151923",
+    cardBorder: "#232a36",
+    label: "#9aa4b2",
+    inputBg: "#0e121a",
+    inputBorder: "#1e2430",
+    inputText: "#e8ecf1",
+    hint: "#9aa4b2",
+    outBg: "#0e121a",
+    outBorder: "#2b3243",
+    outLabel: "#9aa4b2",
+    outValue: "#e8ecf1",
+    buttonBg: "#8b5cf6",
+    buttonText: "#fff",
+    miniBtnBg: "#171b26",
+    miniBtnBorder: "#2b3243",
+    miniBtnText: "#cbd5e1",
+  },
+  light: {
+    background: "#dedede",
+    headerBg: "#ffffff",
+    headerBorder: "#ddd",
+    headerText: "#222",
+    cardBg: "#ffffff",
+    cardBorder: "#ccc",
+    label: "#555",
+    inputBg: "#fff",
+    inputBorder: "#ccc",
+    inputText: "#000",
+    hint: "#777",
+    outBg: "#fff",
+    outBorder: "#ccc",
+    outLabel: "#555",
+    outValue: "#000",
+    buttonBg: "#0f1115",
+    buttonText: "#fff",
+    miniBtnBg: "#eee",
+    miniBtnBorder: "#bbb",
+    miniBtnText: "#000",
+  },
+};
+
+const ThemeContext = createContext();
+const useTheme = () => useContext(ThemeContext);
+
+export default function Screen() {
+  const insets = useSafeAreaInsets();
+
+  const [sl, setSL] = useState("");
+  const [r, setR] = useState("");
+  const [c, setC] = useState("");
+
+  const [defR, setDefR] = useState(null);
+  const [defC, setDefC] = useState(null);
+
+  const [themeName, setThemeName] = useState("dark");
+
+  const drawerWidth = Math.round(width * 0.8);
+  const [isDrawerVisible, setIsDrawerVisible] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const slideX = useRef(new Animated.Value(-drawerWidth)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [savedC, savedR, savedTheme] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.capital),
+        AsyncStorage.getItem(STORAGE_KEYS.riskPct),
+        AsyncStorage.getItem(STORAGE_KEYS.theme),
+      ]);
+      if (savedC) {
+        setC(savedC);
+        setDefC(savedC);
+      }
+      if (savedR) {
+        setR(savedR);
+        setDefR(savedR);
+      }
+      if (savedTheme) {
+        setThemeName(savedTheme);
+      }
+      const hasSeen = await AsyncStorage.getItem("hasSeenTutorial");
+      if (hasSeen !== "true") {
+        setShowTutorial(true);
+      }
+    })();
+  }, []);
+
+  const handleCloseTutorial = async () => {
+    await AsyncStorage.setItem("hasSeenTutorial", "true");
+    setShowTutorial(false);
+  };
+
+  const openDrawer = () => {
+    setIsDrawerVisible(true);
+    Animated.parallel([
+      Animated.timing(slideX, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fade, {
+        toValue: 0.5,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeDrawer = () => {
+    Animated.parallel([
+      Animated.timing(slideX, {
+        toValue: -drawerWidth,
+        duration: 220,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(fade, {
+        toValue: 0,
+        duration: 180,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setIsDrawerVisible(false);
+      setAboutOpen(false);
+    });
+  };
+
+  const cNum = useMemo(() => parseFloat(c), [c]);
+  const rNum = useMemo(() => parseFloat(r), [r]);
+  const slNum = useMemo(() => parseFloat(sl), [sl]);
+
+  const risk = cNum * (rNum / 100);
+  const margin = risk / (slNum / 100 || 1);
+
+  const promptSetDefault = async (which) => {
+    const current = which === "r" ? r : c;
+    if (!current) {
+      Alert.alert("Set Default", `Type a value first.`);
+      return;
+    }
+    if (which === "r") {
+      await AsyncStorage.setItem(STORAGE_KEYS.riskPct, current);
+      setDefR(current);
+      Alert.alert("Saved", `Default Risk % set to ${current}`);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.capital, current);
+      setDefC(current);
+      Alert.alert("Saved", `Default Capital set to ${current}`);
+    }
+  };
+
+  const clearAll = () => {
+    setSL("0");
+    setR(defR ?? "");
+    setC(defC ?? "");
+  };
+
+  const toggleTheme = async () => {
+    const newTheme = themeName === "dark" ? "light" : "dark";
+    setThemeName(newTheme);
+    await AsyncStorage.setItem(STORAGE_KEYS.theme, newTheme);
+  };
+
+  const theme = themes[themeName];
+  const styles = getStyles(theme, drawerWidth);
+
+  return (
+    <ThemeContext.Provider value={theme}>
+      <SafeAreaView style={styles.safe}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.select({ ios: "padding" })}
+        >
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={openDrawer} style={styles.menuBtn} accessibilityLabel="Open menu">
+                <Octicons name="three-bars" size={22} color={theme.headerText} />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Risk Calculator</Text>
+            </View>
+            <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
+              {themeName === "dark" ? (
+                <Octicons name="sun" size={22} color={theme.headerText} />
+              ) : (
+                <Octicons name="moon" size={22} color={theme.headerText} />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {isDrawerVisible && (
+            <View style={styles.drawerOverlay}>
+              <Animated.View style={[styles.backdrop, { opacity: fade }]} />
+              <View style={styles.overlayRow}>
+                <Animated.View
+                  style={[
+                    styles.drawer,
+                    {
+                      transform: [{ translateX: slideX }],
+                      paddingTop: insets.top + 12,
+                      paddingBottom: insets.bottom + 12,
+                    },
+                  ]}
+                >
+                  <View style={styles.drawerHeader}>
+                    <Text style={styles.drawerTitle}>Menu</Text>
+                    <TouchableOpacity onPress={closeDrawer} style={styles.closeBtn}>
+                      <Octicons name="x" size={18} color={theme.inputText} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.drawerBody}>
+                    <ScrollView contentContainerStyle={styles.drawerScrollContent}>
+                      <TouchableOpacity style={styles.drawerItem} onPress={() => setShowTutorial(true)}>
+                        <Text style={styles.drawerText}>Tutorial</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert("Subscription", "Open Subscription")}>
+                        <Text style={styles.drawerText}>Subscription</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert("FAQ", "Open FAQ")}>
+                        <Text style={styles.drawerText}>FAQ</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert("Feedback & Suggestions", "Open Feedback")}>
+                        <Text style={styles.drawerText}>Feedback & Suggestions</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.drawerItemRow} onPress={() => setAboutOpen(v => !v)}>
+                        <Text style={styles.drawerText}>About Us</Text>
+                        <Octicons name={aboutOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.inputText} />
+                      </TouchableOpacity>
+
+                      {aboutOpen && (
+                        <View style={styles.subList}>
+                          <TouchableOpacity style={styles.subItem} onPress={() => Alert.alert("Special Thanks", "Open Special Thanks")}>
+                            <Text style={styles.subText}>Special Thanks</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.subItem} onPress={() => Alert.alert("Privacy Policy", "Open Privacy Policy")}>
+                            <Text style={styles.subText}>Privacy Policy</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.subItem} onPress={() => Alert.alert("Terms of Service", "Open Terms of Service")}>
+                            <Text style={styles.subText}>Terms of Service</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={styles.subItem} onPress={() => Alert.alert("Report a Bug", "Open Bug Report")}>
+                            <Text style={styles.subText}>Report a Bug</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      <TouchableOpacity style={styles.drawerItem} onPress={() => Alert.alert("Rate Us", "Open Store Rating")}>
+                        <Text style={styles.drawerText}>Rate Us</Text>
+                      </TouchableOpacity>
+                    </ScrollView>
+
+                    <TouchableOpacity
+                      style={[styles.clearBtn, { marginBottom: insets.bottom + 8 }]}
+                      onPress={() => {
+                        AsyncStorage.multiRemove([STORAGE_KEYS.capital, STORAGE_KEYS.riskPct]).then(() => {
+                          setDefR(null); setDefC(null);
+                          Alert.alert("Cleared", "Default Capital and Default Risk % removed.");
+                        });
+                      }}
+                    >
+                      <Text style={styles.clearBtnText}>Clear Defaults</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+
+                <Pressable style={styles.hitArea} onPress={closeDrawer} />
+              </View>
+            </View>
+          )}
+
+          <ScrollView contentContainerStyle={styles.container}>
+            <View style={styles.card}>
+              <FieldPercent
+                label="Stoploss %"
+                placeholder="0%"
+                value={sl}
+                onChangeText={setSL}
+              />
+
+              <FieldPercent
+                label="Account Risk"
+                placeholder="0%"
+                value={r}
+                onChangeText={setR}
+                hint={defR ? `Default: ${defR}%` : undefined}
+                rightBtnLabel="Set Default"
+                onRightPress={() => promptSetDefault("r")}
+              />
+
+              <FieldMoney
+                label="Account Capital"
+                placeholder="0"
+                value={c}
+                onChangeText={setC}
+                hint={defC ? `Default: ${money(parseFloat(defC) || 0)}` : undefined}
+                rightBtnLabel="Set Default"
+                onRightPress={() => promptSetDefault("c")}
+              />
+
+              <View style={styles.outBox}>
+                <Text style={styles.outLabel}>Margin</Text>
+                <Text style={styles.outValue}>{money(margin)}</Text>
+              </View>
+
+              <View style={styles.outBox}>
+                <Text style={styles.outLabel}>Risk Amount</Text>
+                <Text style={styles.outValue}>{money(risk)}</Text>
+              </View>
+
+              <View style={styles.actions}>
+                <PrimaryButton label="Clear All" onPress={clearAll} />
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+
+      <OnboardingModal visible={showTutorial} onClose={handleCloseTutorial} />
+    </ThemeContext.Provider>
+  );
+}
+
+function FieldPercent({ label, value, onChangeText, placeholder, hint, rightBtnLabel, onRightPress }) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
+  const displayValue = value !== "" ? `${value}%` : "";
+  const numericLen = displayValue.endsWith("%") ? displayValue.length - 1 : displayValue.length;
+
+  const [selection, setSelection] = React.useState({ start: numericLen, end: numericLen });
+
+  useEffect(() => {
+    setSelection({ start: numericLen, end: numericLen });
+  }, [numericLen]);
+
+  const sanitize = (text) => {
+    const cleaned = text.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    return parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+  };
+
+  return (
+    <View style={styles.fieldWrap}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {!!hint && <Text style={styles.hint}>{hint}</Text>}
+      </View>
+      <View style={styles.inputRow}>
+        <TextInput
+          value={displayValue}
+          onChangeText={(text) => onChangeText(sanitize(text))}
+          selection={selection}
+          onSelectionChange={(e) => {
+            const { start, end } = e.nativeEvent.selection;
+            setSelection({
+              start: Math.min(start, numericLen),
+              end: Math.min(end, numericLen),
+            });
+          }}
+          onFocus={() => setSelection({ start: numericLen, end: numericLen })}
+          placeholder={`${(placeholder || "0").replace(/%/g, "")}%`}
+          placeholderTextColor={theme.hint}
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
+        {!!rightBtnLabel && (
+          <TouchableOpacity style={styles.miniBtn} onPress={onRightPress}>
+            <Text style={styles.miniBtnText}>{rightBtnLabel}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function FieldMoney({ label, value, onChangeText, placeholder, hint, rightBtnLabel, onRightPress }) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
+  const displayValue = value ? `$${value}` : "";
+
+  const sanitize = (text) => {
+    const cleaned = text.replace(/[^0-9.]/g, "");
+    const parts = cleaned.split(".");
+    return parts.length > 2 ? parts[0] + "." + parts.slice(1).join("") : cleaned;
+  };
+
+  return (
+    <View style={styles.fieldWrap}>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {!!hint && <Text style={styles.hint}>{hint}</Text>}
+      </View>
+      <View style={styles.inputRow}>
+        <TextInput
+          value={displayValue}
+          onChangeText={(text) => onChangeText(sanitize(text))}
+          placeholder={`$${placeholder || "0"}`}
+          placeholderTextColor={theme.hint}
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
+        {!!rightBtnLabel && (
+          <TouchableOpacity style={styles.miniBtn} onPress={onRightPress}>
+            <Text style={styles.miniBtnText}>{rightBtnLabel}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function PrimaryButton({ label, onPress }) {
+  const theme = useTheme();
+  const styles = getStyles(theme);
+
+  const isDark = theme.background === themes.dark.background;
+  const gradientColors = isDark ? ['#8b5cf6', '#563fd9'] : ['#0f1115', '#4b5563'];
+
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.primaryBtn}>
+      <LinearGradient
+        colors={gradientColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientLayer}
+      >
+        <Text style={[styles.primaryBtnText, { color: theme.buttonText }]}>{label}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+const getStyles = (theme, drawerWidthParam = Math.round(width * 0.8)) =>
+  StyleSheet.create({
+    safe: { flex: 1, backgroundColor: theme.background },
+
+    header: {
+      paddingTop: Platform.OS === "ios" ? 44 : 34,
+      paddingBottom: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.headerBorder,
+      backgroundColor: theme.headerBg,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      zIndex: 2,
+    },
+    headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+    menuBtn: { padding: 8, marginLeft: -8 },
+    headerTitle: { color: theme.headerText, fontSize: 18, fontWeight: "800", letterSpacing: 0.3 },
+    themeToggle: { padding: 8 },
+
+    drawerOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 3,
+    },
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,1)" },
+    overlayRow: { flex: 1, flexDirection: "row" },
+
+    drawer: {
+      width: drawerWidthParam,
+      height: "100%",
+      backgroundColor: theme.cardBg,
+      borderRightWidth: 1,
+      borderRightColor: theme.cardBorder,
+      paddingHorizontal: 14,
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      shadowOffset: { width: 2, height: 0 },
+      elevation: 6,
+    },
+
+    hitArea: { flex: 1 },
+
+    drawerHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    closeBtn: { padding: 6, marginRight: -6 },
+    drawerTitle: { color: theme.outValue, fontSize: 16, fontWeight: "800" },
+
+    drawerBody: {
+      flex: 1,
+    },
+    drawerScrollContent: {
+      paddingBottom: 16,
+    },
+
+    drawerItem: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.outBorder,
+    },
+    drawerItemRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.outBorder,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    drawerText: { color: theme.inputText, fontSize: 14, fontWeight: "600" },
+
+    subList: {
+      paddingLeft: 10,
+      backgroundColor: theme.inputBg,
+      borderRadius: 8,
+      marginTop: 8,
+      marginBottom: 6,
+    },
+    subItem: {
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.inputBorder,
+    },
+    subText: { color: theme.miniBtnText, fontSize: 13 },
+
+    clearBtn: {
+      marginTop: "auto",
+      backgroundColor: theme.buttonBg,
+      borderRadius: 10,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    clearBtnText: { color: theme.buttonText, fontWeight: "800" },
+
+    container: { padding: 16, paddingBottom: 40 },
+    card: {
+      backgroundColor: theme.cardBg,
+      borderColor: theme.cardBorder,
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 18,
+    },
+    fieldWrap: { marginBottom: 12 },
+    labelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+    label: { color: theme.label, fontSize: 12, paddingLeft: 6 },
+    hint: { color: theme.hint, fontSize: 12, paddingRight: 9 },
+    inputRow: { position: "relative" },
+    input: {
+      backgroundColor: theme.inputBg,
+      borderColor: theme.inputBorder,
+      borderWidth: 1,
+      color: theme.inputText,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 12,
+      fontSize: 16,
+    },
+    miniBtn: {
+      position: "absolute",
+      right: 6,
+      top: 6,
+      bottom: 6,
+      borderRadius: 10,
+      backgroundColor: theme.miniBtnBg,
+      borderWidth: 1,
+      borderColor: theme.miniBtnBorder,
+      paddingHorizontal: 10,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    miniBtnText: { color: theme.miniBtnText, fontSize: 12, fontWeight: "600" },
+    outBox: {
+      backgroundColor: theme.outBg,
+      borderColor: theme.outBorder,
+      borderWidth: 1,
+      borderRadius: 12,
+      paddingVertical: 16,
+      paddingHorizontal: 14,
+      marginBottom: 10,
+    },
+    outLabel: { color: theme.outLabel, fontSize: 12, marginBottom: 4 },
+    outValue: { color: theme.outValue, fontSize: 24, fontWeight: "800", letterSpacing: 0.2 },
+    actions: { marginTop: 12 },
+    primaryBtn: { borderRadius: 12, overflow: "hidden" },
+    gradientLayer: {
+      paddingVertical: 12,
+      alignItems: "center",
+      borderRadius: 12,
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
+    },
+    primaryBtnText: { fontWeight: "800" },
+  });
