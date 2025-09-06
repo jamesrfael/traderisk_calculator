@@ -83,7 +83,6 @@ export default function Screen() {
         const seen = await AsyncStorage.getItem(ONBOARD_KEY);
         if (!seen) setTutorialVisible(true);
       } catch (e) {
-        // If storage fails, don't crash—just skip defaults and show tutorial
         setTutorialVisible(true);
       }
     })();
