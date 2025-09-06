@@ -68,7 +68,6 @@ export default function Screen() {
           AsyncStorage.getItem(STORAGE_KEYS.riskPct),
           AsyncStorage.getItem(STORAGE_KEYS.theme),
         ]);
-
         if (savedC) {
           setC(savedC);
           setDefC(savedC);
